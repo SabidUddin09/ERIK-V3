@@ -1,130 +1,242 @@
 import streamlit as st
-import requests
-from bs4 import BeautifulSoup
 import sympy as sp
+import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import PyPDF2
+import docx
+from scholarly import scholarly
+from googlesearch import search
+from googletrans import Translator
 import random
-import urllib.parse
 
-# ------------------ ERIK Intro ------------------
-st.set_page_config(page_title="ERIK - Exceptional Resources & Intelligence Kernal", layout="wide")
-st.title("🤖 ERIK - Exceptional Resources & Intelligence Kernal")
-st.write("Welcome to **ERIK**! 🚀\n\nYour AI-powered study buddy for solving doubts, generating quizzes, analyzing topics, and more. Supports **Bangla + English** automatically.")
+# ------------------------------
+# APP CONFIG
+# ------------------------------
+st.set_page_config(page_title="ERIK", layout="wide")
+st.title("🤖 ERIK: Exceptional Resources & Intelligence Kernel")
+st.caption("🚀 Developed by **Sabid Uddin Nahian**")
 
-# ------------------ Session State ------------------
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+translator = Translator()
 
-# ------------------ Utility Functions ------------------
-def google_search_answer(query):
-    """Search Google and return first paragraph from Wikipedia or top result"""
-    try:
-        search_url = "https://www.google.com/search?q=" + urllib.parse.quote(query)
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(search_url, headers=headers)
-        soup = BeautifulSoup(response.text, "html.parser")
-        # Try to get snippet from Google
-        snippet = soup.find("div", class_="BNeawe s3v9rd AP7Wnd")
-        if snippet:
-            return snippet.text
-        # Fallback to Wikipedia
-        wiki_url = f"https://en.wikipedia.org/wiki/{query.replace(' ', '_')}"
-        wiki_page = requests.get(wiki_url, headers=headers)
-        wiki_soup = BeautifulSoup(wiki_page.text, "html.parser")
-        paragraphs = wiki_soup.find_all("p")
-        for p in paragraphs:
-            if len(p.text) > 50:
-                return p.text
-        return "No good answer found."
-    except Exception as e:
-        return f"Error fetching answer: {e}"
+# ------------------------------
+# SESSION STATE FOR CHAT HISTORY
+# ------------------------------
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-def solve_math(expression):
-    try:
-        expr = sp.sympify(expression)
-        solution = sp.simplify(expr)
-        return f"**Solution:** {solution}"
-    except:
-        return "Sorry, could not solve the math problem."
+def add_history(q, a):
+    st.session_state.history.append({"q": q, "a": a})
 
-def plot_graph(expression):
-    try:
-        x = sp.symbols("x")
-        expr = sp.sympify(expression)
-        sp_expr = sp.lambdify(x, expr, "numpy")
-        import numpy as np
-        X = np.linspace(-10, 10, 400)
-        Y = sp_expr(X)
-        fig, ax = plt.subplots()
-        ax.plot(X, Y)
-        ax.axhline(0, color="black")
-        ax.axvline(0, color="black")
-        ax.set_title(f"Graph of {expression}")
-        st.pyplot(fig)
-    except Exception as e:
-        st.write("Graph error:", e)
+# ------------------------------
+# SIDEBAR CHAT HISTORY
+# ------------------------------
+st.sidebar.header("💬 Chat History")
+for i, msg in enumerate(st.session_state.history):
+    st.sidebar.write(f"**Q{i+1}:** {msg['q']}")
+    st.sidebar.write(f"**A:** {msg['a']}")
+    st.sidebar.markdown("---")
 
-def generate_quiz(topic):
-    qs = [
-        f"What is the key concept of {topic}?",
-        f"Explain {topic} in 2 lines.",
-        f"Create 1 MCQ from {topic}.",
-    ]
-    return random.sample(qs, 2)
+# ------------------------------
+# MENU
+# ------------------------------
+menu = st.sidebar.selectbox("📌 Choose Feature", [
+    "Doubt Solver", "Topic Analyzer", "Document Upload",
+    "Quiz Generator", "Flashcards", "Math Solver",
+    "Graph Generator (2D)", "3D Diagram Generator", "Research Assistant"
+])
 
-def generate_flashcards(topic):
-    return {
-        "Front": f"Definition of {topic}?",
-        "Back": f"{topic} means ..."
-    }
+# ------------------------------
+# DOUBT SOLVER
+# ------------------------------
+if menu == "Doubt Solver":
+    st.header("❓ Doubt Solver (Google Search)")
+    query = st.text_input("Enter your question (Bangla/English):")
+    answer_format = st.selectbox("Answer Format", ["Short (≤75 words)", "Long (≤350 words)"])
+    
+    if query:
+        translated = translator.translate(query, dest="en").text
+        st.write(f"🔎 Searching for: **{translated}**")
+        try:
+            results = list(search(translated, num=3, stop=3))
+            final_answer = ""
+            for r in results:
+                final_answer += r + " "
+            # Short vs Long formatting
+            if answer_format.startswith("Short"):
+                final_answer = " ".join(final_answer.split()[:75])
+            else:
+                final_answer = " ".join(final_answer.split()[:350])
+            st.write(final_answer)
+            add_history(query, final_answer)
+        except Exception as e:
+            st.error(f"Search error: {e}")
 
-# ------------------ Features ------------------
-menu = st.sidebar.radio("📚 Features", 
-    ["💬 Doubt Solver", "📑 Topic Analyzer", "📝 Quiz Generator", "🎴 Flashcards"])
+# ------------------------------
+# TOPIC ANALYZER
+# ------------------------------
+elif menu == "Topic Analyzer":
+    st.header("📘 Topic Analyzer")
+    topic_text = st.text_area("Enter topic/text:")
+    if topic_text:
+        translated_text = translator.translate(topic_text, dest="en").text
+        words = translated_text.split()
+        summary = " ".join(words[:50]) + "..." if len(words) > 50 else translated_text
+        keywords = list(set([w for w in words if len(w) > 5]))[:8]
+        st.subheader("Summary:")
+        st.write(summary)
+        st.subheader("Keywords:")
+        st.write(", ".join(keywords))
+        st.subheader("Example Questions:")
+        for i, kw in enumerate(keywords):
+            st.write(f"{i+1}. Explain {kw} in short.")
 
-# ---- Doubt Solver ----
-if menu == "💬 Doubt Solver":
-    query = st.text_input("Ask your question (Bangla or English):")
-    response_type = st.radio("Response format:", ["Short", "Long"])
+# ------------------------------
+# DOCUMENT UPLOAD
+# ------------------------------
+elif menu == "Document Upload":
+    st.header("📂 Document Upload")
+    uploaded = st.file_uploader("Upload PDF, DOCX, TXT", type=["pdf", "docx", "txt"])
+    if uploaded:
+        text = ""
+        if uploaded.type == "application/pdf":
+            reader = PyPDF2.PdfReader(uploaded)
+            for page in reader.pages:
+                text += page.extract_text()
+        elif uploaded.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            doc = docx.Document(uploaded)
+            for para in doc.paragraphs:
+                text += para.text + "\n"
+        elif uploaded.type == "text/plain":
+            text = uploaded.read().decode("utf-8")
+        st.subheader("Extracted Text (preview):")
+        st.write(text[:500] + "...")
 
-    if st.button("Get Answer"):
-        if any(op in query for op in ["+", "-", "*", "/", "x^2", "integrate", "diff"]):
-            answer = solve_math(query)
-        else:
-            answer = google_search_answer(query)
+# ------------------------------
+# QUIZ GENERATOR
+# ------------------------------
+elif menu == "Quiz Generator":
+    st.header("📝 Quiz Generator")
+    quiz_topic = st.text_input("Enter topic for quiz:")
+    num_q = st.slider("Number of Questions:", 3, 10, 5)
+    if quiz_topic:
+        st.subheader("MCQs:")
+        for i in range(num_q):
+            st.write(f"Q{i+1}: Example question on {quiz_topic}?")
+            st.radio("Options:", ["A", "B", "C", "D"])
+        st.subheader("Short Questions:")
+        for i in range(num_q):
+            st.write(f"Q{i+1}: Explain {quiz_topic} briefly.")
+        st.subheader("Long Questions:")
+        for i in range(num_q):
+            st.write(f"Q{i+1}: Discuss {quiz_topic} in detail.")
 
-        if response_type == "Short":
-            answer = answer[:250] + "..."
+# ------------------------------
+# FLASHCARDS
+# ------------------------------
+elif menu == "Flashcards":
+    st.header("🎴 Flashcards")
+    flash_topic = st.text_input("Enter topic for flashcards:")
+    num_cards = st.slider("Number of flashcards:", 3, 10, 5)
+    if flash_topic:
+        for i in range(1, num_cards+1):
+            st.write(f"**Front:** Concept {i} on {flash_topic}")
+            st.write(f"**Back:** Explanation {i} on {flash_topic}")
 
-        st.session_state.chat_history.append(("You", query))
-        st.session_state.chat_history.append(("ERIK", answer))
+# ------------------------------
+# QUICKMATH SOLVER
+# ------------------------------
+elif menu == "Math Solver":
+    st.header("📐 QuickMath Solver (Step-by-Step)")
+    expr_input = st.text_input("Enter math expression (e.g., integrate(sin(x), x)):")
+    if expr_input:
+        try:
+            x, y, z = sp.symbols("x y z")
+            expr = sp.sympify(expr_input)
+            simplified = sp.simplify(expr)
+            derivative = sp.diff(expr)
+            integral = sp.integrate(expr)
+            st.subheader("Simplified:")
+            st.latex(sp.latex(simplified))
+            st.subheader("Derivative:")
+            st.latex(sp.latex(derivative))
+            st.subheader("Integral:")
+            st.latex(sp.latex(integral))
+            add_history(expr_input, str(simplified))
+        except Exception as e:
+            st.error(f"Math error: {e}")
 
-    # Show history
-    for sender, msg in st.session_state.chat_history:
-        st.write(f"**{sender}:** {msg}")
+# ------------------------------
+# 2D GRAPH GENERATOR
+# ------------------------------
+elif menu == "Graph Generator (2D)":
+    st.header("📊 2D Graph Generator")
+    func_input = st.text_input("Enter function f(x):")
+    if func_input:
+        try:
+            x = sp.Symbol("x")
+            func = sp.lambdify(x, sp.sympify(func_input), "numpy")
+            X = np.linspace(-10, 10, 400)
+            Y = func(X)
+            fig, ax = plt.subplots()
+            ax.plot(X, Y)
+            st.pyplot(fig)
+        except Exception as e:
+            st.error(f"Plot error: {e}")
 
-    # Graph generator option
-    graph_exp = st.text_input("Enter math expression to plot (e.g., x**2 + 3*x):")
-    if st.button("Plot Graph"):
-        plot_graph(graph_exp)
+# ------------------------------
+# 3D DIAGRAM GENERATOR
+# ------------------------------
+elif menu == "3D Diagram Generator":
+    st.header("🌐 3D Diagram Generator")
+    f3d_input = st.text_input("Enter function f(x, y):")
+    if f3d_input:
+        try:
+            x, y = sp.symbols("x y")
+            func = sp.lambdify((x, y), sp.sympify(f3d_input), "numpy")
+            X = np.linspace(-5, 5, 50)
+            Y = np.linspace(-5, 5, 50)
+            X, Y = np.meshgrid(X, Y)
+            Z = func(X, Y)
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection="3d")
+            ax.plot_surface(X, Y, Z, cmap="viridis")
+            st.pyplot(fig)
+        except Exception as e:
+            st.error(f"3D plot error: {e}")
 
-# ---- Topic Analyzer ----
-elif menu == "📑 Topic Analyzer":
-    topic = st.text_input("Enter exam topic:")
-    if st.button("Analyze"):
-        st.write(f"**Key Concepts of {topic}:**\n- Concept 1\n- Concept 2\n- Concept 3")
-        st.write(f"**Example Question:** What is {topic} used for?")
+# ------------------------------
+# RESEARCH ASSISTANT
+# ------------------------------
+elif menu == "Research Assistant":
+    st.header("🔎 Research Assistant (Google Scholar)")
+    topic = st.text_input("Enter research topic:")
+    answer_format = st.selectbox("Answer Format", ["Short (≤75 words)", "Long (≤350 words)"])
+    if topic:
+        try:
+            search_query = scholarly.search_pubs(topic)
+            results_text = ""
+            st.write("### Top 3 Papers:")
+            for i in range(3):
+                pub = next(search_query)
+                st.markdown(f"**{pub['bib']['title']}**")
+                st.write(f"Authors: {pub['bib'].get('author','N/A')}")
+                st.write(f"Year: {pub['bib'].get('pub_year','N/A')}")
+                st.write(f"Abstract: {pub['bib'].get('abstract','No abstract')}")
+                if 'eprint_url' in pub:
+                    st.write(f"[Read Paper]({pub['eprint_url']})")
+                results_text += pub['bib'].get('abstract','') + " "
+            # Format answer length
+            if answer_format.startswith("Short"):
+                results_text = " ".join(results_text.split()[:75])
+            else:
+                results_text = " ".join(results_text.split()[:350])
+            add_history(topic, results_text)
+        except Exception as e:
+            st.error(f"Research error: {e}")
 
-# ---- Quiz Generator ----
-elif menu == "📝 Quiz Generator":
-    topic = st.text_input("Enter topic for quiz:")
-    if st.button("Generate Quiz"):
-        st.write(generate_quiz(topic))
-
-# ---- Flashcards ----
-elif menu == "🎴 Flashcards":
-    topic = st.text_input("Enter topic for flashcards:")
-    if st.button("Generate Flashcards"):
-        flash = generate_flashcards(topic)
-        st.write("**Front:**", flash["Front"])
-        st.write("**Back:**", flash["Back"])
+# ------------------------------
+# FOOTER
+# ------------------------------
+st.markdown("<hr>", unsafe_allow_html=True)
+st.caption("🚀 Developed by **Sabid Uddin Nahian**")
