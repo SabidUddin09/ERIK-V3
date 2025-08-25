@@ -1,17 +1,13 @@
 import streamlit as st
-from googlesearch import search
 import requests
 from bs4 import BeautifulSoup
-import fitz  # PyMuPDF for PDF
-import docx
 import sympy as sp
 import matplotlib.pyplot as plt
-import io
 import random
+import urllib.parse
 
 # ------------------ ERIK Intro ------------------
 st.set_page_config(page_title="ERIK - Exceptional Resources & Intelligence Kernal", layout="wide")
-
 st.title("🤖 ERIK - Exceptional Resources & Intelligence Kernal")
 st.write("Welcome to **ERIK**! 🚀\n\nYour AI-powered study buddy for solving doubts, generating quizzes, analyzing topics, and more. Supports **Bangla + English** automatically.")
 
@@ -20,18 +16,28 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # ------------------ Utility Functions ------------------
-def google_answer(query):
+def google_search_answer(query):
+    """Search Google and return first paragraph from Wikipedia or top result"""
     try:
-        result_links = list(search(query, num_results=1))
-        if result_links:
-            url = result_links[0]
-            page = requests.get(url, timeout=5)
-            soup = BeautifulSoup(page.text, "html.parser")
-            text = " ".join([p.text for p in soup.find_all("p")[:5]])
-            return text[:800] + "...\n\n(Source: " + url + ")"
-        return "No results found."
-    except:
-        return "Error while searching."
+        search_url = "https://www.google.com/search?q=" + urllib.parse.quote(query)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        response = requests.get(search_url, headers=headers)
+        soup = BeautifulSoup(response.text, "html.parser")
+        # Try to get snippet from Google
+        snippet = soup.find("div", class_="BNeawe s3v9rd AP7Wnd")
+        if snippet:
+            return snippet.text
+        # Fallback to Wikipedia
+        wiki_url = f"https://en.wikipedia.org/wiki/{query.replace(' ', '_')}"
+        wiki_page = requests.get(wiki_url, headers=headers)
+        wiki_soup = BeautifulSoup(wiki_page.text, "html.parser")
+        paragraphs = wiki_soup.find_all("p")
+        for p in paragraphs:
+            if len(p.text) > 50:
+                return p.text
+        return "No good answer found."
+    except Exception as e:
+        return f"Error fetching answer: {e}"
 
 def solve_math(expression):
     try:
@@ -46,11 +52,9 @@ def plot_graph(expression):
         x = sp.symbols("x")
         expr = sp.sympify(expression)
         sp_expr = sp.lambdify(x, expr, "numpy")
-
         import numpy as np
         X = np.linspace(-10, 10, 400)
         Y = sp_expr(X)
-
         fig, ax = plt.subplots()
         ax.plot(X, Y)
         ax.axhline(0, color="black")
@@ -76,7 +80,7 @@ def generate_flashcards(topic):
 
 # ------------------ Features ------------------
 menu = st.sidebar.radio("📚 Features", 
-    ["💬 Doubt Solver", "📑 Topic Analyzer", "📂 Document Upload", "📝 Quiz Generator", "🎴 Flashcards"])
+    ["💬 Doubt Solver", "📑 Topic Analyzer", "📝 Quiz Generator", "🎴 Flashcards"])
 
 # ---- Doubt Solver ----
 if menu == "💬 Doubt Solver":
@@ -84,15 +88,10 @@ if menu == "💬 Doubt Solver":
     response_type = st.radio("Response format:", ["Short", "Long"])
 
     if st.button("Get Answer"):
-        if any("০১২৩৪৫৬৭৮৯অআইঈউঊঋএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহ" in ch for ch in query):
-            lang = "bn"
-        else:
-            lang = "en"
-
         if any(op in query for op in ["+", "-", "*", "/", "x^2", "integrate", "diff"]):
             answer = solve_math(query)
         else:
-            answer = google_answer(query)
+            answer = google_search_answer(query)
 
         if response_type == "Short":
             answer = answer[:250] + "..."
@@ -115,25 +114,6 @@ elif menu == "📑 Topic Analyzer":
     if st.button("Analyze"):
         st.write(f"**Key Concepts of {topic}:**\n- Concept 1\n- Concept 2\n- Concept 3")
         st.write(f"**Example Question:** What is {topic} used for?")
-
-# ---- Document Upload ----
-elif menu == "📂 Document Upload":
-    uploaded = st.file_uploader("Upload PDF, DOCX, or TXT", type=["pdf", "docx", "txt"])
-    if uploaded:
-        text = ""
-        if uploaded.name.endswith(".pdf"):
-            doc = fitz.open(stream=uploaded.read(), filetype="pdf")
-            for page in doc:
-                text += page.get_text()
-        elif uploaded.name.endswith(".docx"):
-            doc = docx.Document(uploaded)
-            for para in doc.paragraphs:
-                text += para.text + "\n"
-        else:
-            text = uploaded.read().decode("utf-8")
-
-        st.write("📖 Extracted Content:")
-        st.write(text[:1000])
 
 # ---- Quiz Generator ----
 elif menu == "📝 Quiz Generator":
