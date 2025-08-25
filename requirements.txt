@@ -1,8 +1,6 @@
-streamlit
-googlesearch-python
-requests
-beautifulsoup4
-pymupdf
-python-docx
-sympy
-matplotlib
+streamlit==1.25.0
+requests==2.31.0
+beautifulsoup4==4.12.2
+sympy==1.12
+matplotlib==3.8.0
+numpy==1.26.0
