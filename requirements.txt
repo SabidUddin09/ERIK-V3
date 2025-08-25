@@ -1,8 +1,9 @@
 streamlit
-googlesearch-python
-requests
-beautifulsoup4
-pymupdf
-python-docx
 sympy
+numpy
+scipy
 matplotlib
+plotly
+pandas
+PyPDF2
+python-docx
