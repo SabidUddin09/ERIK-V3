@@ -3,177 +3,207 @@ import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import PyPDF2
-import docx
-import os
-from scholarly import scholarly
 from googlesearch import search
-from googletrans import Translator
-import random
+import requests
+from bs4 import BeautifulSoup
+import fitz  # PyMuPDF
+import docx
 
-# ------------------------------
-# APP CONFIG
-# ------------------------------
-st.set_page_config(page_title="ERIK", layout="wide")
-st.title("🤖 ERIK: Exceptional Resources & Intelligence Kernel")
-st.caption("🚀 Developed by **Sabid Uddin Nahian**")
+# ---------------------------
+# APP TITLE & INTRO
+# ---------------------------
+st.set_page_config(page_title="ERIK - AI Study Assistant", layout="wide")
+st.title("📘 ERIK - Exceptional Resources & Intelligence Kernal")
+st.write("Welcome to **ERIK**, your AI-powered study and research assistant. 🚀")
+st.write("👉 Features: Doubt Solver | Topic Analyzer | Quiz Generator | Flashcards | Document Upload | Math Solver | Graphing | Research Assistant | 3D Diagrams")
 
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-translator = Translator()
-
-# ------------------------------
+# ---------------------------
 # CHAT HISTORY
-# ------------------------------
-st.sidebar.header("💬 Chat History")
-for i, msg in enumerate(st.session_state.history):
-    st.sidebar.write(f"**Q{i+1}:** {msg['q']}")
-    st.sidebar.write(f"**A:** {msg['a']}")
-    st.sidebar.markdown("---")
+# ---------------------------
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-# ------------------------------
-# DOUBT SOLVER (GOOGLE-BASED)
-# ------------------------------
-st.header("❓ Doubt Solver (Google Search)")
-query = st.text_input("Ask a question (Bangla/English):")
+def add_chat(role, text):
+    st.session_state.chat_history.append({"role": role, "text": text})
 
-if query:
-    try:
-        translated = translator.translate(query, dest="en").text
-        st.write(f"🔎 Searching for: **{translated}**")
-
-        results = list(search(translated, num=3, stop=3))
-        for r in results:
-            st.write(f"[Result]({r})")
-        
-        st.session_state.history.append({"q": query, "a": results})
-    except Exception as e:
-        st.error(f"Search error: {e}")
-
-# ------------------------------
-# TOPIC ANALYZER
-# ------------------------------
-st.header("📘 Topic Analyzer")
-topic_text = st.text_area("Enter text or topic:")
-
-if topic_text:
-    translated_text = translator.translate(topic_text, dest="en").text
-    words = translated_text.split()
-    summary = " ".join(words[:50]) + "..." if len(words) > 50 else translated_text
-    keywords = list(set([w for w in words if len(w) > 5]))[:8]
-
-    st.subheader("Summary:")
-    st.write(summary)
-    st.subheader("Keywords:")
-    st.write(", ".join(keywords))
-
-# ------------------------------
+# ---------------------------
 # DOCUMENT UPLOAD
-# ------------------------------
-st.header("📂 Document Upload & Analysis")
-uploaded = st.file_uploader("Upload PDF, DOCX, or TXT", type=["pdf", "docx", "txt"])
+# ---------------------------
+def extract_text_from_file(uploaded_file):
+    if uploaded_file.type == "application/pdf":
+        doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        return text
+    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        doc = docx.Document(uploaded_file)
+        return " ".join([para.text for para in doc.paragraphs])
+    else:
+        return uploaded_file.read().decode("utf-8")
 
-if uploaded:
-    text = ""
-    if uploaded.type == "application/pdf":
-        reader = PyPDF2.PdfReader(uploaded)
-        for page in reader.pages:
-            text += page.extract_text()
-    elif uploaded.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        doc = docx.Document(uploaded)
-        for para in doc.paragraphs:
-            text += para.text + "\n"
-    elif uploaded.type == "text/plain":
-        text = uploaded.read().decode("utf-8")
+# ---------------------------
+# DOUBT SOLVER
+# ---------------------------
+def doubt_solver(question):
+    # Simple Google-based answer fetch
+    query = question
+    try:
+        for j in search(query, num=1, stop=1, lang="en"):
+            res = requests.get(j)
+            soup = BeautifulSoup(res.text, "html.parser")
+            return soup.get_text()[:500]
+    except:
+        return "Couldn't fetch an answer. Please try rephrasing."
 
-    st.subheader("Extracted Text:")
-    st.write(text[:500] + "...")
-
-# ------------------------------
+# ---------------------------
 # QUIZ GENERATOR
-# ------------------------------
-st.header("📝 Quiz Generator")
-quiz_topic = st.text_input("Enter topic for quiz:")
+# ---------------------------
+def generate_quiz(text, q_type="MCQ"):
+    sentences = text.split(".")
+    questions = []
+    for i, sentence in enumerate(sentences[:5]):
+        if q_type == "MCQ":
+            questions.append(f"Q{i+1}: {sentence.strip()}?")
+        elif q_type == "Short":
+            questions.append(f"Q{i+1}: Explain briefly → {sentence.strip()}")
+        else:
+            questions.append(f"Q{i+1}: Write in detail → {sentence.strip()}")
+    return questions
 
-if quiz_topic:
-    st.subheader("MCQ:")
-    st.write(f"1. What is {quiz_topic}?")
-    st.radio("Options:", ["A", "B", "C", "D"])
-    st.subheader("Short Question:")
-    st.write(f"Explain {quiz_topic} in 3 sentences.")
-    st.subheader("Long Question:")
-    st.write(f"Discuss {quiz_topic} in detail.")
-
-# ------------------------------
+# ---------------------------
 # FLASHCARDS
-# ------------------------------
-st.header("🎴 Flashcards")
-flash_topic = st.text_input("Enter topic for flashcards:")
+# ---------------------------
+def generate_flashcards(text):
+    key_points = text.split(".")[:5]
+    return [{"front": f"Concept {i+1}", "back": kp.strip()} for i, kp in enumerate(key_points)]
 
-if flash_topic:
-    st.write(f"**Front:** Define {flash_topic}")
-    st.write(f"**Back:** {flash_topic} is ...")
-
-# ------------------------------
-# QUICKMATH SOLVER
-# ------------------------------
-st.header("📐 QuickMath Solver (Step-by-Step)")
-expr_input = st.text_input("Enter math expression (e.g. integrate(sin(x), x)): ")
-
-if expr_input:
+# ---------------------------
+# ADVANCED MATH SOLVER
+# ---------------------------
+def solve_math(expression):
     try:
-        x, y, z = sp.symbols("x y z")
-        expr = sp.sympify(expr_input)
-        result = sp.simplify(expr)
-        st.latex(sp.latex(result))
-        st.session_state.history.append({"q": expr_input, "a": str(result)})
+        expr = sp.sympify(expression)
+        simplified = sp.simplify(expr)
+        derivative = sp.diff(expr)
+        integral = sp.integrate(expr)
+        return {
+            "Simplified": str(simplified),
+            "Derivative": str(derivative),
+            "Integral": str(integral)
+        }
     except Exception as e:
-        st.error(f"Math error: {e}")
+        return {"Error": str(e)}
 
-# ------------------------------
-# 2D GRAPH GENERATOR
-# ------------------------------
-st.header("📊 Graph Generator (2D)")
-func_input = st.text_input("Enter function f(x):")
+# ---------------------------
+# GRAPH GENERATOR (2D & 3D)
+# ---------------------------
+def plot_function(expr):
+    x = sp.symbols('x')
+    f = sp.lambdify(x, sp.sympify(expr), "numpy")
+    X = np.linspace(-10, 10, 400)
+    Y = f(X)
+    fig, ax = plt.subplots()
+    ax.plot(X, Y)
+    ax.set_title(f"Graph of {expr}")
+    st.pyplot(fig)
 
-if func_input:
+def plot_3d(expr):
+    x, y = sp.symbols('x y')
+    f = sp.lambdify((x,y), sp.sympify(expr), "numpy")
+    X = np.linspace(-5, 5, 50)
+    Y = np.linspace(-5, 5, 50)
+    X, Y = np.meshgrid(X, Y)
+    Z = f(X, Y)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_surface(X, Y, Z, cmap="viridis")
+    ax.set_title(f"3D Surface of {expr}")
+    st.pyplot(fig)
+
+# ---------------------------
+# RESEARCH ASSISTANT
+# ---------------------------
+def research_assistant(topic):
+    st.write(f"🔍 Researching: {topic}")
+    results = []
     try:
-        x = sp.Symbol("x")
-        func = sp.lambdify(x, sp.sympify(func_input), "numpy")
-        X = np.linspace(-10, 10, 400)
-        Y = func(X)
+        for j in search(topic, num=3, stop=3, lang="en"):
+            results.append(j)
+    except:
+        results.append("No results found")
+    return results
 
-        fig, ax = plt.subplots()
-        ax.plot(X, Y)
-        st.pyplot(fig)
-    except Exception as e:
-        st.error(f"Plot error: {e}")
+# ---------------------------
+# SIDEBAR MENU
+# ---------------------------
+menu = st.sidebar.selectbox("📌 Choose Feature", 
+    ["Doubt Solver", "Topic Analyzer", "Document Upload", 
+     "Quiz Generator", "Flashcards", "Math Solver", 
+     "Graph Generator", "3D Diagram Generator", "Research Assistant"])
 
-# ------------------------------
-# 3D DIAGRAM GENERATOR
-# ------------------------------
-st.header("🌐 3D Diagram Generator")
-f3d_input = st.text_input("Enter function f(x, y):")
+# ---------------------------
+# MAIN APP LOGIC
+# ---------------------------
+if menu == "Doubt Solver":
+    q = st.text_input("Ask your academic question:")
+    if q:
+        ans = doubt_solver(q)
+        add_chat("User", q)
+        add_chat("ERIK", ans)
+        st.write("**Answer:**", ans)
 
-if f3d_input:
-    try:
-        x, y = sp.symbols("x y")
-        func = sp.lambdify((x, y), sp.sympify(f3d_input), "numpy")
-        X = np.linspace(-5, 5, 50)
-        Y = np.linspace(-5, 5, 50)
-        X, Y = np.meshgrid(X, Y)
-        Z = func(X, Y)
+elif menu == "Topic Analyzer":
+    topic = st.text_area("Enter a topic:")
+    if topic:
+        st.subheader("🔑 Key Concepts")
+        st.write(topic.split()[:10])
+        st.subheader("📘 Example Questions")
+        st.write(generate_quiz(topic, "Short"))
 
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
-        ax.plot_surface(X, Y, Z, cmap="viridis")
-        st.pyplot(fig)
-    except Exception as e:
-        st.error(f"3D plot error: {e}")
+elif menu == "Document Upload":
+    uploaded = st.file_uploader("Upload study material", type=["pdf","docx","txt"])
+    if uploaded:
+        content = extract_text_from_file(uploaded)
+        st.write(content[:1000])
 
-# ------------------------------
-# FOOTER
-# ------------------------------
-st.markdown("<hr>", unsafe_allow_html=True)
-st.caption("🚀 Developed by **Sabid Uddin Nahian**")
+elif menu == "Quiz Generator":
+    notes = st.text_area("Paste your notes:")
+    if notes:
+        st.write(generate_quiz(notes, "MCQ"))
+
+elif menu == "Flashcards":
+    notes = st.text_area("Paste notes for flashcards:")
+    if notes:
+        for card in generate_flashcards(notes):
+            st.write(f"🃏 **{card['front']}** → {card['back']}")
+
+elif menu == "Math Solver":
+    expr = st.text_input("Enter math expression (e.g., sin(x)^2 + cos(x)^2):")
+    if expr:
+        results = solve_math(expr)
+        st.json(results)
+
+elif menu == "Graph Generator":
+    expr = st.text_input("Enter function in x (e.g., sin(x)):")
+    if expr:
+        plot_function(expr)
+
+elif menu == "3D Diagram Generator":
+    expr = st.text_input("Enter function in x,y (e.g., sin(x)*cos(y)):")
+    if expr:
+        plot_3d(expr)
+
+elif menu == "Research Assistant":
+    topic = st.text_input("Enter research topic:")
+    if topic:
+        results = research_assistant(topic)
+        for r in results:
+            st.write("🔗", r)
+
+# ---------------------------
+# SHOW CHAT HISTORY
+# ---------------------------
+st.sidebar.subheader("💬 Chat History")
+for chat in st.session_state.chat_history:
+    st.sidebar.write(f"**{chat['role']}**: {chat['text']}")
