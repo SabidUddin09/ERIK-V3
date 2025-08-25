@@ -3,8 +3,9 @@ sympy
 numpy
 scipy
 matplotlib
-plotly
 pandas
 PyPDF2
 python-docx
 scholarly
+googletrans==4.0.0-rc1
+googlesearch-python
