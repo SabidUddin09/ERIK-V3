@@ -13,7 +13,10 @@ import random
 # ------------------------------
 st.set_page_config(page_title="ERIK", layout="wide")
 st.title("🤖 ERIK: Exceptional Resources & Intelligence Kernel")
-st.caption("🚀 Developed by Sabid Uddin Nahian")
+st.caption("🚀 Developed by **Sabid Uddin Nahian**")
+
+# Welcome message
+st.info("Welcome to ERIK! Your AI Exam Companion. Ask questions, analyze topics, generate quizzes, solve math, and more!")
 
 translator = Translator()
 
@@ -41,21 +44,22 @@ for i, msg in enumerate(st.session_state.history):
 menu = st.sidebar.selectbox("📌 Choose Feature", [
     "Doubt Solver", "Topic Analyzer", "Document Upload",
     "Quiz Generator", "Flashcards", "Math Solver",
-    "Graph Generator (2D)", "3D Diagram Generator"
+    "Graph Generator (2D)", "3D Diagram Generator",
+    "Research Assistant"
 ])
 
 # ------------------------------
-# DOUBT SOLVER (Simplified)
+# DOUBT SOLVER
 # ------------------------------
 if menu == "Doubt Solver":
-    st.header("❓ Doubt Solver (Local AI-based)")
-    query = st.text_area("Enter your question (Bangla/English):")
+    st.header("❓ Doubt Solver")
+    query = st.text_area("Enter your academic question (Bangla/English):")
     answer_format = st.selectbox("Answer Format", ["Short (≤75 words)", "Long (≤350 words)"], key="doubt_format")
     
     if st.button("Solve Doubt"):
         if query:
             translated = translator.translate(query, dest="en").text
-            # Simulated AI answer (replace with real logic or search)
+            # Simulated AI answer
             answer = f"Simulated answer for: {translated}"
             if answer_format.startswith("Short"):
                 answer = " ".join(answer.split()[:75])
@@ -137,25 +141,22 @@ elif menu == "Flashcards":
             st.write(f"**Back:** Explanation {i} on {flash_topic}")
 
 # ------------------------------
-# QUICKMATH SOLVER
+# MATH SOLVER
 # ------------------------------
 elif menu == "Math Solver":
-    st.header("📐 QuickMath Solver (Step-by-Step)")
-    expr_input = st.text_input("Enter math expression (e.g., integrate(sin(x), x)):")
+    st.header("📐 Math Solver (Calculus, Algebra, Integrals, Navier-Stokes)")
+    expr_input = st.text_input("Enter math expression (SymPy format):")
     if st.button("Solve Math"):
         try:
             x, y, z = sp.symbols("x y z")
             expr = sp.sympify(expr_input)
-            simplified = sp.simplify(expr)
-            derivative = sp.diff(expr)
-            integral = sp.integrate(expr)
             st.subheader("Simplified:")
-            st.latex(sp.latex(simplified))
+            st.latex(sp.latex(sp.simplify(expr)))
             st.subheader("Derivative:")
-            st.latex(sp.latex(derivative))
+            st.latex(sp.latex(sp.diff(expr)))
             st.subheader("Integral:")
-            st.latex(sp.latex(integral))
-            add_history(expr_input, str(simplified))
+            st.latex(sp.latex(sp.integrate(expr)))
+            add_history(expr_input, str(expr))
         except Exception as e:
             st.error(f"Math error: {e}")
 
